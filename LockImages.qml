@@ -33,7 +33,6 @@ BarWidget {
   readonly property bool lockDrift: !settings || settings.lockDrift !== false
   readonly property bool screensaverDrift: !settings || settings.screensaverDrift !== false
 
-  readonly property color fgColor: root.bar ? root.bar.barForeground : Commons.Color.foreground
   property string statusLine: "checking…"
   property string actionNote: ""
   readonly property bool busy: materializer.running || baker.running || installer.running
@@ -194,37 +193,21 @@ BarWidget {
     probe()
   }
 
-  // ---- The widget: a small padlock, shapes only (no icon-font risk).
+  // ---- The widget: standard icon button, sized by the bar like every other
+  // icon (Style.bar.iconSize). Closed lock = a drift surface enabled, open =
+  // both off.
 
-  implicitWidth: 22
-  implicitHeight: lockShape.height + 4
+  implicitWidth: button.implicitWidth
+  implicitHeight: button.implicitHeight
 
-  Item {
-    id: lockShape
-    anchors.centerIn: parent
-    width: 16
-    height: 15
-    opacity: root.screensaverDrift || root.lockDrift ? 1 : 0.45
-
-    // Shackle
-    Rectangle {
-      x: 3.5; y: 0; width: 9; height: 9; radius: 4
-      color: "transparent"
-      border.width: 1.5
-      border.color: root.fgColor
-    }
-    // Body
-    Rectangle {
-      x: 1; y: 6.5; width: 14; height: 8.5; radius: 2
-      color: root.fgColor
-    }
-  }
-
-  MouseArea {
+  BarIconButton {
+    id: button
     anchors.fill: parent
-    cursorShape: Qt.PointingHandCursor
-    acceptedButtons: Qt.LeftButton | Qt.RightButton
-    onClicked: function(mouse) { root.togglePanel() }
+    bar: root.bar
+    text: root.screensaverDrift || root.lockDrift ? "\uF033E" : "\uF033C"
+    active: root.opened
+    tooltipText: "Lockscreen Images — photo drift for the screensaver and lock screen; click for the control panel"
+    onPressed: function(mouseButton) { root.togglePanel() }
   }
 
   // ---- Remote control: omarchy-shell io.github.kambiz.lockscreen-images <method>
