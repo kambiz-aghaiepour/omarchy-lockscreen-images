@@ -184,7 +184,15 @@ BarWidget {
   }
 
   onBarChanged: injectPanel()
-  onSettingsChanged: injectPanel()
+  onSettingsChanged: {
+    injectPanel()
+    materialize()
+  }
+
+  Component.onCompleted: {
+    materialize()
+    probe()
+  }
 
   // ---- The widget: a small padlock, shapes only (no icon-font risk).
 
