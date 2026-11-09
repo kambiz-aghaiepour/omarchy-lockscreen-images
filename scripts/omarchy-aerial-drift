@@ -1,0 +1,90 @@
+#!/bin/bash
+# omarchy:summary=Aerial-drift engine: Ken Burns bake of a photo folder, fullscreen mpv screensaver, lock-screen frame feeder; configured by the Lockscreen Images plugin
+# usage: omarchy-aerial-drift [serve|feed|bake] [dir]
+#
+# Config (optional JSON, omarchy-shell-safe defaults when absent):
+#   ${OMARCHY_LOCK_DRIFT_CONFIG:-$HOME/.config/lockscreen-drift.json}
+#     { "imagesDir": "~/Pictures/Lockscreen", "rotateSeconds": 60, "lockDrift": true }
+# Explicit dir argument wins over the config. The stock flows
+# (omarchy-launch-screensaver, omarchy-system-lock) adopt this script from
+# ~/.local/bin automatically when it is executable.
+set -euo pipefail
+
+CONFIG=${OMARCHY_LOCK_DRIFT_CONFIG:-$HOME/.config/lockscreen-drift.json}
+mode=${1:-serve}
+
+cfg() { # cfg <key> <default>
+  if [[ -f $CONFIG ]] && command -v jq >/dev/null 2>&1; then
+    jq -r --arg k "$1" --arg d "$2" '.[$k] // $d' "$CONFIG" 2>/dev/null || echo "$2"
+  else
+    echo "$2"
+  fi
+}
+
+dir=${2:-}
+if [[ -z $dir ]]; then
+  dir=$(cfg imagesDir "$HOME/Downloads/Backgrounds")
+fi
+dir=${dir/#\~/$HOME}
+
+ROTATE=$(cfg rotateSeconds 60)
+case $ROTATE in ''|*[!0-9.]*) ROTATE=60 ;; esac
+LOCK_DRIFT=$(cfg lockDrift true)
+
+baked=$dir/.baked
+W=1920
+H=1080
+SECS=20
+FPS=30
+
+bake() {
+  mkdir -p "$baked"; shopt -s nullglob
+  local n=0
+  for f in "$dir"/*.jpg "$dir"/*.jpeg "$dir"/*.png; do
+    n=$((n+1)); out=$baked/$(printf '%03d' $n)-$(basename "${f%.*}").mp4
+    [[ -s $out ]] && continue
+    ffmpeg -v error -y -loop 1 -i "$f" -t $SECS \
+      -filter_complex "scale=3840:2160:force_original_aspect_ratio=increase,crop=3840:2160,zoompan=z='1+0.00035*on':x='iw/2-(iw/zoom/2)+on*0.4':y='ih/2-(ih/zoom/2)-on*0.2':d=${SECS}*${FPS}:s=${W}x${H}:fps=${FPS},format=yuv420p" \
+      -c:v libx264 -preset veryfast -crf 20 -movflags +faststart "$out"
+  done
+  ((n)) || { echo "no jpg/png in $dir" >&2; exit 1; }
+  echo "baked $n clips -> $baked"
+}
+
+serve() {
+  [[ -d $baked ]] || bake
+  shopt -s nullglob
+  local files=("$baked"/*.mp4)
+  ((${#files[@]})) || { echo "nothing baked in $dir" >&2; exit 1; }
+  exec mpv --fullscreen --loop-playlist=inf --shuffle \
+    --input-conf=$HOME/.config/omarchy/mpv-screensaver.conf \
+    --mute=yes --osc=no --osd-level=0 \
+    --wayland-app-id=org.omarchy.screensaver \
+    --x11-name=org.omarchy.screensaver \
+    "${files[@]}"
+}
+
+# Lock-time feed: the compositor renders black beneath a session-lock surface,
+# so a fullscreen player is invisible there. The feeder continuously re-encodes
+# a random clip into ONE jpeg the lock reloads; frames are published via
+# rename(2), so readers never see a torn image.
+FEED_OUT=/dev/shm/omarchy-drift.jpg
+feed() {
+  [[ $LOCK_DRIFT == true ]] || { echo "lockDrift disabled in $CONFIG" >&2; exit 0; }
+  local here; here=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+  local feeder=$here/omarchy-drift-feed
+    [[ -x $feeder ]] || feeder=$HOME/.local/bin/omarchy-drift-feed
+  [[ -x $feeder ]] || { echo "omarchy-drift-feed not found" >&2; exit 1; }
+  [[ -d $baked ]] || bake
+  shopt -s nullglob
+  local files=("$baked"/*.mp4)
+  ((${#files[@]})) || { echo "nothing baked in $dir" >&2; exit 1; }
+  OMARCHY_DRIFT_ROTATE=$ROTATE exec "$feeder" "$baked"
+}
+
+case $mode in
+  bake) bake ;;
+  serve) serve ;;
+  feed) feed ;;
+  *) echo "usage: omarchy-aerial-drift [serve|feed|bake] [dir]" >&2; exit 1 ;;
+esac

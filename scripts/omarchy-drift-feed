@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""omarchy-drift-feed: lock-screen frame feeder.
+
+Feeds the lock screen a never-ending mjpeg stream from ffmpeg. Every frame is
+published atomically (rename) to /dev/shm/omarchy-drift.jpg. The shown clip
+rotates to the next baked clip every ROTATE_S seconds (default 60, override
+with OMARCHY_DRIFT_ROTATE). ffmpeg is restarted if it dies. Killed by the lock
+flow via `pkill -f omarchy-drift`.
+"""
+import os
+import select
+import subprocess
+import sys
+import time
+
+OUT = "/dev/shm/omarchy-drift.jpg"
+TMP = "/dev/shm/.omarchy-drift.jpg"
+LOG = "/tmp/omarchy-drift-feed.log"
+SOI, EOI = b"\xff\xd8\xff", b"\xff\xd9"
+ROTATE_S = float(os.environ.get("OMARCHY_DRIFT_ROTATE", "60"))
+
+
+def log(msg):
+    try:
+        with open(LOG, "a") as fh:
+            fh.write("%.3f %s\n" % (time.time(), msg))
+    except OSError:
+        pass
+
+
+def ffmpeg_cmd(src):
+    return [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-re", "-stream_loop", "-1", "-i", src,
+        "-vf", "scale=1536:960:force_original_aspect_ratio=increase,crop=1536:960,fps=15",
+        "-q:v", "4", "-f", "image2pipe", "-vcodec", "mjpeg", "-",
+    ]
+
+
+def pump_until(dec, deadline, state):
+    """Consume frames until `deadline`; returns when it passes or ffmpeg ends."""
+    fd = dec.stdout.fileno()
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return "rotate"
+        r, _, _ = select.select([dec.stdout], [], [], min(remaining, 1.0))
+        if not r:
+            continue
+        chunk = os.read(fd, 1 << 16)
+        if not chunk:
+            return "eof"
+        state["buf"] += chunk
+        while True:
+            end = state["buf"].find(EOI)
+            if end < 0:
+                # Keep the tail from growing unbounded on a corrupt stream.
+                if len(state["buf"]) > 1 << 22:
+                    state["buf"] = state["buf"][-4096:]
+                break
+            frame = state["buf"][: end + 2]
+            state["buf"] = state["buf"][end + 2 :]
+            start = frame.find(SOI)
+            if start < 0:
+                continue
+            frame = frame[start:]
+            with open(TMP, "wb") as fh:
+                fh.write(frame)
+            os.replace(TMP, OUT)  # atomic: readers only ever see whole JPEGs
+
+
+def kill(dec):
+    try:
+        dec.kill()
+    except OSError:
+        pass
+    try:
+        dec.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def main():
+    baked = sys.argv[1]
+    clips = sorted(
+        os.path.join(baked, f) for f in os.listdir(baked) if f.endswith(".mp4")
+    )
+    if not clips:
+        log("no clips in %s" % baked)
+        return
+    idx = (id(os) ^ time.time_ns()) % len(clips)  # random-ish first pick
+    state = {"buf": b""}
+    log("feed start [%d] %s" % (idx, clips[idx]))
+    while True:
+        dec = subprocess.Popen(ffmpeg_cmd(clips[idx]), stdout=subprocess.PIPE, bufsize=0)
+        outcome = "rotate"
+        try:
+            outcome = pump_until(dec, time.time() + ROTATE_S, state)
+        except Exception as exc:  # never leave the lock unfed
+            log("feeder error %r" % (exc,))
+        finally:
+            kill(dec)
+        if outcome == "rotate":
+            idx = (idx + 1) % len(clips)
+            state["buf"] = b""
+            log("rotate [%d] %s" % (idx, os.path.basename(clips[idx])))
+        else:
+            log("ffmpeg eof, respawning same clip")
+            time.sleep(0.5)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        log("fatal %r" % (exc,))
+        raise

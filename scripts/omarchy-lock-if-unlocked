@@ -1,0 +1,7 @@
+#!/bin/bash
+# Delayed-lock guard for the hypridle single-listener design: the transient
+# omarchy-delayed-lock unit runs this LOCK_DELAY seconds after the screensaver
+# starts. Lock now, unless a lock is already active (manual lock while the
+# screensaver ran, or a resume race).
+[[ $(omarchy-shell lock isLocked 2>/dev/null) == "true" ]] && exit 0
+exec omarchy system lock

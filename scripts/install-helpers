@@ -1,0 +1,19 @@
+#!/bin/bash
+# Install/refresh the drift helper trio into ~/.local/bin, where the stock
+# omarchy-launch-screensaver and omarchy-system-lock flows adopt them
+# automatically. Existing copies are backed up as <name>.bak.<timestamp>.
+set -euo pipefail
+
+src=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+dest=$HOME/.local/bin
+mkdir -p "$dest"
+ts=$(date +%Y%m%d-%H%M%S)
+
+for name in omarchy-aerial-drift omarchy-drift-feed omarchy-lock-if-unlocked; do
+  if [[ -f $dest/$name && ! -L $dest/$name ]]; then
+    cp -a "$dest/$name" "$dest/$name.bak.$ts"
+  fi
+  install -m 755 "$src/$name" "$dest/$name"
+done
+
+echo "installed $dest/omarchy-aerial-drift $dest/omarchy-drift-feed $dest/omarchy-lock-if-unlocked (backups suffixed .bak.$ts)"
