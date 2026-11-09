@@ -204,7 +204,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.screensaverDrift || root.lockDrift ? "\uF033E" : "\uF033C"
+    text: root.screensaverDrift || root.lockDrift ? String.fromCodePoint(0xF033E) : String.fromCodePoint(0xF033C)
     active: root.opened
     tooltipText: "Lockscreen Images — photo drift for the screensaver and lock screen; click for the control panel"
     onPressed: function(mouseButton) { root.togglePanel() }
