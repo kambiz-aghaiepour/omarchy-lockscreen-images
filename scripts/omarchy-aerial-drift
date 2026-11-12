@@ -56,8 +56,34 @@ serve() {
   shopt -s nullglob
   local files=("$baked"/*.mp4)
   ((${#files[@]})) || { echo "nothing baked in $dir" >&2; exit 1; }
+
+  # Never let a missing or stale user config leave Esc on mpv's default
+  # "exit fullscreen" binding. Merge the user config into a runtime copy,
+  # then append the dismiss keys last so they always win.
+  local user_input=$HOME/.config/omarchy/mpv-screensaver.conf
+  local runtime=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}
+  local input_conf=$runtime/omarchy-screensaver-input.conf
+  local input_tmp
+  input_tmp=$(mktemp "$runtime/omarchy-screensaver-input.XXXXXX")
+  {
+    if [[ -f $user_input ]]; then
+      cat "$user_input"
+    fi
+    printf '%s\n' \
+      '' \
+      '# Appended by omarchy-aerial-drift: these are the screensaver dismissal' \
+      '# keys, so Esc cannot merely leave the player windowed.' \
+      'ESC quit' \
+      'SPACE quit' \
+      'ENTER quit' \
+      'PGUP quit' \
+      'PGDWN quit' \
+      'BS quit'
+  } > "$input_tmp"
+  mv -f "$input_tmp" "$input_conf"
+
   exec mpv --fullscreen --loop-playlist=inf --shuffle \
-    --input-conf=$HOME/.config/omarchy/mpv-screensaver.conf \
+    --input-conf="$input_conf" \
     --mute=yes --osc=no --osd-level=0 \
     --wayland-app-id=org.omarchy.screensaver \
     --x11-name=org.omarchy.screensaver \

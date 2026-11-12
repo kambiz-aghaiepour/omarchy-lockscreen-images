@@ -16,4 +16,13 @@ for name in omarchy-aerial-drift omarchy-drift-feed omarchy-lock-if-unlocked; do
   install -m 755 "$src/$name" "$dest/$name"
 done
 
+input_conf=$HOME/.config/omarchy/mpv-screensaver.conf
+if [[ ! -f $input_conf ]]; then
+  mkdir -p "$(dirname "$input_conf")"
+  install -m 644 "$src/mpv-screensaver.conf" "$input_conf"
+  echo "installed $input_conf"
+else
+  echo "kept existing $input_conf (dismiss keys are still enforced at launch)"
+fi
+
 echo "installed $dest/omarchy-aerial-drift $dest/omarchy-drift-feed $dest/omarchy-lock-if-unlocked (backups suffixed .bak.$ts)"

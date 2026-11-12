@@ -37,4 +37,35 @@ bash -n "$here/scripts/omarchy-lock-if-unlocked"
 bash -n "$here/scripts/install-helpers"
 bash -n "$here/scripts/omarchy-aerial-drift"
 echo "OK: scripts parse"
+
+echo "== serve input config"
+mkdir -p "$tmp/bin" "$tmp/home"
+cat > "$tmp/bin/mpv" <<'EOF'
+#!/bin/bash
+for arg in "$@"; do
+  case $arg in
+    --input-conf=*) cp "${arg#--input-conf=}" "$CAPTURE" ;;
+  esac
+done
+EOF
+chmod +x "$tmp/bin/mpv"
+
+CAPTURE=$tmp/served-input.conf HOME=$tmp/home PATH="$tmp/bin:$PATH" \
+  OMARCHY_LOCK_DRIFT_CONFIG=$cfg "$here/scripts/omarchy-aerial-drift" serve
+for key in ESC SPACE ENTER PGUP PGDWN BS; do
+  grep -qx "$key quit" "$tmp/served-input.conf" ||
+    { echo "FAIL: $key quit missing from generated input" >&2; exit 1; }
+done
+echo "OK: generated input binds every dismissal key"
+
+mkdir -p "$tmp/home/.config/omarchy"
+printf 'SPACE cycle pause\n' > "$tmp/home/.config/omarchy/mpv-screensaver.conf"
+CAPTURE=$tmp/served-input-user.conf HOME=$tmp/home PATH="$tmp/bin:$PATH" \
+  OMARCHY_LOCK_DRIFT_CONFIG=$cfg "$here/scripts/omarchy-aerial-drift" serve
+grep -qx 'SPACE cycle pause' "$tmp/served-input-user.conf" ||
+  { echo "FAIL: user input binding was not preserved" >&2; exit 1; }
+grep -qx 'SPACE quit' "$tmp/served-input-user.conf" ||
+  { echo "FAIL: dismissal binding did not override user binding" >&2; exit 1; }
+echo "OK: generated input merges user bindings and enforces dismissal"
+
 echo "ALL OK"

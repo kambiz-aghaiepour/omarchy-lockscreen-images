@@ -49,7 +49,7 @@ listener {
 }
 ```
 
-Input dismissal while the screensaver plays: `~/.config/omarchy/mpv-screensaver.conf` (ESC/SPACE/ENTER/PGUP/PGDN/BS quit).
+Input dismissal while the screensaver plays: `~/.config/omarchy/mpv-screensaver.conf` (ESC/SPACE/ENTER/PGUP/PGDN/BS quit). The helper merges this file into a runtime input config and appends the dismissal keys last, so a missing or partial file cannot leave Esc toggling fullscreen. `install-helpers` creates the default file when absent and never overwrites an existing one.
 
 ## Files
 
@@ -59,6 +59,7 @@ Panel.qml                 popout control panel
 scripts/omarchy-aerial-drift   engine: bake | serve | feed (config- and arg-driven)
 scripts/omarchy-drift-feed     lock-frame feeder (python, ffmpeg pipe → /dev/shm)
 scripts/omarchy-lock-if-unlocked  delayed-lock guard for the hypridle timer
+scripts/mpv-screensaver.conf   default dismissal bindings, installed if absent
 scripts/install-helpers   installer with backups
 tests/smoke.sh            end-to-end smoke: bake 1 image, feed frames, assert JPEG
 ```
