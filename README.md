@@ -51,6 +51,15 @@ listener {
 
 Input dismissal while the screensaver plays: `~/.config/omarchy/mpv-screensaver.conf` (ESC/SPACE/ENTER/PGUP/PGDN/BS quit). The helper merges this file into a runtime input config and appends the dismissal keys last, so a missing or partial file cannot leave Esc toggling fullscreen. `install-helpers` creates the default file when absent and never overwrites an existing one.
 
+Run only one idle driver. This listener and Omarchy's built-in Idle service both
+launch the screensaver at the same timeout. If both are enabled they race, start
+two mpv windows, and Esc closes only the focused one. Disable the built-in
+service:
+
+```bash
+omarchy plugin disable omarchy.idle
+```
+
 ## Files
 
 ```
