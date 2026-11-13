@@ -1,0 +1,21 @@
+--- a/bin/omarchy-launch-screensaver
++++ b/bin/omarchy-launch-screensaver
+@@ -55,6 +55,18 @@
+   # Share a special workspace that is already showing, like the scratchpad, so it is still open afterwards.
+   workspace=${special:-special:screensaver-$m}
+ 
++  # Aerial drift override: mpv fullscreen instead of terminal effects.
++  # OMARCHY_SCREENSAVER=ascii forces the built-in terminal-effects path;
++  # touch ~/.local/share/omarchy/screensaver-ascii for a durable switch.
++  if [[ ${OMARCHY_SCREENSAVER:-} != ascii && -x $HOME/.local/bin/omarchy-aerial-drift ]] &&
++    [[ ! -f $HOME/.local/share/omarchy/screensaver-ascii ]]; then
++    hypr_exec "$HOME/.local/bin/omarchy-aerial-drift" serve
++    # mpv maps asynchronously; without this wait every player opens on whichever
++    # monitor is focused when it finally maps (usually the last one).
++    wait_for_screensaver_window
++    continue
++  fi
++
+   case $terminal in
+   *Alacritty*)
+     hypr_exec alacritty --class=org.omarchy.screensaver --config-file "$OMARCHY_PATH/default/alacritty/screensaver.toml" -e omarchy-screensaver
