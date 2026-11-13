@@ -7,7 +7,7 @@ Point it at a folder of images; the plugin bakes them into slow Ken Burns clips 
 - **Screensaver** — fullscreen `mpv` shuffle-loop of the baked clips on a per-monitor special workspace (`org.omarchy.screensaver`), launched by Omarchy's stock idle flow.
 - **Lock screen** — while locked, a feeder re-encodes the clips to a single JPEG (`/dev/shm/omarchy-drift.jpg`, atomic rename, rotating every N seconds) that the lock surface paints: live drift *under* the lock, no player window.
 
-This is the behavior already running on the author's machine, generalized: the stock `omarchy-launch-screensaver` and `omarchy-system-lock` automatically adopt `~/.local/bin/omarchy-aerial-drift` / `omarchy-drift-feed` when present — the plugin's panel installs them there.
+This is the behavior already running on the author's machine, generalized: `omarchy-system-lock` adopts `~/.local/bin/omarchy-drift-feed` when present, while `omarchy-launch-screensaver` needs the launcher hook below to run `omarchy-aerial-drift`. The plugin's panel installs both helpers into `~/.local/bin`.
 
 ## Install
 
@@ -22,6 +22,17 @@ Local checkout:
 ```sh
 omarchy plugin add "$PWD" --enable
 ```
+
+### Launcher hook
+
+The screensaver half also needs `omarchy-launch-screensaver` to launch the helper. If the launcher does not already contain the aerial-drift branch, apply the tracked v4.5.0 patch:
+
+```sh
+sudo cp -a /usr/bin/omarchy-launch-screensaver /usr/bin/omarchy-launch-screensaver.bak
+sudo patch -d /usr -p1 < ~/.config/omarchy/plugins/io.github.kambiz.lockscreen-images/scripts/omarchy-launch-screensaver.patch
+```
+
+The patch waits for each `mpv` window to map before focusing the next monitor, so the players stay on their own outputs.
 
 ## Control panel (click the padlock widget)
 
@@ -68,6 +79,7 @@ Panel.qml                 popout control panel
 scripts/omarchy-aerial-drift   engine: bake | serve | feed (config- and arg-driven)
 scripts/omarchy-drift-feed     lock-frame feeder (python, ffmpeg pipe → /dev/shm)
 scripts/omarchy-lock-if-unlocked  delayed-lock guard for the hypridle timer
+scripts/omarchy-launch-screensaver.patch  launcher hook: aerial branch + per-monitor wait
 scripts/mpv-screensaver.conf   default dismissal bindings, installed if absent
 scripts/install-helpers   installer with backups
 tests/smoke.sh            end-to-end smoke: bake 1 image, feed frames, assert JPEG
